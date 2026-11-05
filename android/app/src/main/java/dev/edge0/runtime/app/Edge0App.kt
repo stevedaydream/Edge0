@@ -7,6 +7,7 @@ import android.app.Application
 import android.content.ComponentCallbacks2
 import android.content.res.Configuration
 import android.util.Log
+import dev.edge0.runtime.app.api.RuntimeBackend
 import dev.edge0.runtime.app.data.AppDatabase
 import dev.edge0.runtime.app.data.ChatRepository
 import dev.edge0.runtime.app.data.RoomChatRepository
@@ -34,6 +35,8 @@ class AppContainer(private val app: Application) {
     val modelRoots: List<File?>
         get() = listOf(File(app.filesDir, "models"), app.getExternalFilesDir("models"))
     val imports = ModelImportSession(File(app.filesDir, "models"))
+    /** Local API adapter over the same runtime the chat screen uses. */
+    val apiBackend by lazy { RuntimeBackend(runtime, settings) { modelRoots } }
 }
 
 class Edge0App : Application() {

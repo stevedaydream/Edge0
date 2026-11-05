@@ -1,7 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Single APK delivery: no INTERNET permission - the app is fully on-device;
-              models are staged into app-private dirs, no storage permission needed. -->
+    <!-- Single APK delivery; models are staged into app-private dirs, no storage permission needed.
+         INTERNET is required only to open the opt-in loopback API socket (127.0.0.1);
+         the app never connects out and the socket is never bound to a LAN interface. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
         android:name=".Edge0App"
         android:allowBackup="false"
@@ -24,5 +29,14 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- opt-in local OpenAI-compatible API (Settings > Local API) -->
+        <service
+            android:name=".api.ApiService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Serves the on-device language model to other apps on this phone over a loopback-only HTTP API" />
+        </service>
     </application>
 </manifest>

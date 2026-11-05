@@ -36,6 +36,10 @@ data class AppSettings(
     //   storage key kept as show_thinking for backward compatibility
     val metricsOverlay: Boolean = false,  // off by default
     val activeModelDir: String = "",
+    // local OpenAI-compatible API (loopback only; off by default)
+    val apiEnabled: Boolean = false,
+    val apiPort: Int = 8080,
+    val apiToken: String = "",           // blank = no bearer token required
 )
 
 object SettingsKeys {
@@ -52,6 +56,9 @@ object SettingsKeys {
     val SHOW_THINKING = booleanPreferencesKey("show_thinking")
     val OVERLAY = booleanPreferencesKey("metrics_overlay")
     val ACTIVE_MODEL = stringPreferencesKey("active_model_dir")
+    val API_ENABLED = booleanPreferencesKey("api_enabled")
+    val API_PORT = intPreferencesKey("api_port")
+    val API_TOKEN = stringPreferencesKey("api_token")
 }
 
 class SettingsStore(private val context: Context) {
@@ -72,6 +79,9 @@ class SettingsStore(private val context: Context) {
             enableThinking = p[SettingsKeys.SHOW_THINKING] ?: d.enableThinking,
             metricsOverlay = p[SettingsKeys.OVERLAY] ?: d.metricsOverlay,
             activeModelDir = p[SettingsKeys.ACTIVE_MODEL] ?: d.activeModelDir,
+            apiEnabled = p[SettingsKeys.API_ENABLED] ?: d.apiEnabled,
+            apiPort = p[SettingsKeys.API_PORT] ?: d.apiPort,
+            apiToken = p[SettingsKeys.API_TOKEN] ?: d.apiToken,
         )
     }
 
@@ -92,6 +102,9 @@ class SettingsStore(private val context: Context) {
             p[SettingsKeys.SHOW_THINKING] = next.enableThinking
             p[SettingsKeys.OVERLAY] = next.metricsOverlay
             p[SettingsKeys.ACTIVE_MODEL] = next.activeModelDir
+            p[SettingsKeys.API_ENABLED] = next.apiEnabled
+            p[SettingsKeys.API_PORT] = next.apiPort
+            p[SettingsKeys.API_TOKEN] = next.apiToken
         }
     }
 }

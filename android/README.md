@@ -335,6 +335,43 @@ The protocol only depends on the app's `Runtime` interface, so it is unit-tested
 runtime. `app/build.gradle.kts` adds a `BuildConfig.ENGINE_COMMIT` field read from
 `../vendor.llama.pin`.
 
+### 1.8 Local OpenAI-compatible API (opt-in)
+
+Other apps on the same phone can use the loaded model through an OpenAI-compatible
+endpoint. It runs the same engine instance as the chat screen, so `moe_pool` expert
+streaming, keepwarm refill and KV prefix reuse all apply unchanged.
+
+1. *Settings → Local API* → turn it on (optionally *Generate key*).
+2. Point any OpenAI client at `http://127.0.0.1:8080/v1`.
+
+```bash
+# from Termux on the phone
+curl http://127.0.0.1:8080/v1/chat/completions -H 'Content-Type: application/json' \
+  -d '{"messages":[{"role":"user","content":"Say hello in one sentence."}],"stream":true}'
+```
+
+| Route | Notes |
+|---|---|
+| `GET /v1/models` | imported `.gguf` models |
+| `POST /v1/chat/completions` | `stream`, `stream_options.include_usage`, `temperature`, `max_tokens` / `max_completion_tokens`, `top_k`, `chat_template_kwargs.enable_thinking`; thinking text is returned as `reasoning_content` |
+| `GET /health` | liveness |
+
+Behavior and limits:
+- **Loopback only** (`127.0.0.1`), never bound to Wi-Fi/LAN. Requests carrying a browser
+  `Origin` header or a non-loopback `Host` are refused (403), so web pages cannot use it.
+- Optional bearer key (`Authorization: Bearer <key>`); blank = none.
+- **One generation at a time.** API requests queue behind each other; if the chat screen
+  is generating, the API answers `429` before any stream starts.
+- `model` selects an imported model by name (switching models reloads the engine);
+  omitted or `"edge0"` = the model already loaded.
+- Unset fields use the app's Settings. `top_p` and other unsupported sampling fields are
+  ignored (the engine has no top-p, see §1.7). Text-only: image parts are rejected (400).
+- A foreground service keeps the process alive; set the app's battery usage to
+  *Unrestricted* on OEM builds that kill background services. On the 35B tier, expect the
+  cold-pool first turn (§2) — give clients a generous timeout.
+- Code: `app/src/main/java/dev/edge0/runtime/app/api/` (`LocalHttpServer` / `ApiRouter` /
+  `OpenAiCodec` are pure JVM and covered by `app/src/test/.../api/LocalApiTest.kt`).
+
 ---
 
 ## 2. Performance

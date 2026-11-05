@@ -43,6 +43,17 @@ import dev.edge0.runtime.app.data.AppSettings
 import dev.edge0.runtime.app.ui.theme.LocalFontScale
 import dev.edge0.runtime.app.ui.theme.ThemeMode
 import kotlinx.coroutines.launch
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.font.FontFamily
+import dev.edge0.runtime.app.api.ApiService
+import java.security.SecureRandom
 
 @Composable
 fun SettingsScreen(onBack: () -> Unit) {
@@ -121,6 +132,8 @@ fun SettingsScreen(onBack: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
         }
 
+        Group("Local API") { LocalApiSettings(s) { f -> patch(f) } }
+
         Group("About") {
             Text("llama.cpp (pinned build) · " +
                  "app ${dev.edge0.runtime.app.BuildConfig.VERSION_NAME}" +
@@ -164,4 +177,63 @@ private fun ParamSliderInt(label: String, value: Int, min: Int, max: Int,
     Slider(value = value.toFloat().coerceIn(min.toFloat(), max.toFloat()),
            onValueChange = { onValue(it.toInt()) }, valueRange = min.toFloat()..max.toFloat(),
            modifier = Modifier.fillMaxWidth())
+}
+
+/** Local OpenAI-compatible API: toggle, port, optional bearer token, live status. */
+@Composable
+private fun ColumnScope.LocalApiSettings(s: AppSettings, patch: ((AppSettings) -> AppSettings) -> Unit) {
+    val ctx = LocalContext.current
+    val runningPort by ApiService.running.collectAsStateWithLifecycle()
+    val lastError by ApiService.lastError.collectAsStateWithLifecycle()
+    // notification permission only affects whether the status notification is shown
+    val notifPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    var portText by remember(s.apiPort) { mutableStateOf(s.apiPort.toString()) }
+
+    fun setEnabled(on: Boolean) {
+        patch { it.copy(apiEnabled = on) }
+        if (on) {
+            if (ctx.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+                notifPerm.launch(Manifest.permission.POST_NOTIFICATIONS)
+            ApiService.start(ctx)
+        } else ApiService.stop(ctx)
+    }
+
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text("OpenAI-compatible API on this phone", modifier = Modifier.weight(1f))
+        Switch(checked = s.apiEnabled, onCheckedChange = ::setEnabled)
+    }
+    val status = when {
+        runningPort != null -> "Running · http://127.0.0.1:$runningPort/v1"
+        lastError != null -> lastError!!
+        s.apiEnabled -> "Starting…"
+        else -> "Off · loopback only, never reachable from the network"
+    }
+    Text(status, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
+         color = if (lastError != null && runningPort == null) MaterialTheme.colorScheme.error
+                 else MaterialTheme.colorScheme.onSurfaceVariant)
+
+    OutlinedTextField(value = portText,
+        onValueChange = { v ->
+            portText = v.filter { it.isDigit() }.take(5)
+            portText.toIntOrNull()?.takeIf { it in 1024..65535 }?.let { p -> patch { it.copy(apiPort = p) } }
+        },
+        label = { Text("Port (1024–65535, restart API to apply)") }, singleLine = true,
+        modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+    OutlinedTextField(value = s.apiToken,
+        onValueChange = { v -> patch { it.copy(apiToken = v.trim()) } },
+        label = { Text("API key (blank = none)") }, singleLine = true,
+        modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+    Row {
+        TextButton(onClick = {
+            val b = ByteArray(24).also { SecureRandom().nextBytes(it) }
+            patch { it.copy(apiToken = "e0-" + b.joinToString("") { x -> "%02x".format(x) }) }
+        }) { Text("Generate key") }
+        if (runningPort != null) TextButton(onClick = {
+            ApiService.stop(ctx); ApiService.start(ctx)
+        }) { Text("Restart API") }
+    }
+    Text("Shares the model loaded in this app. Other apps call it with base_url " +
+         "http://127.0.0.1:${s.apiPort}/v1. One request runs at a time; the chat screen " +
+         "and the API share the generation slot. Set battery usage to Unrestricted to keep it alive.",
+         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
